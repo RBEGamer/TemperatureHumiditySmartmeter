@@ -214,7 +214,9 @@ void setup() {
     // LOAD SETTINGS
     restore_eeprom_values();
 
+    setup_wifi();
 
+    
     //WEBSERVER ROUTES
     delay(1000);
     server.on("/", handleRoot);
@@ -316,7 +318,26 @@ void handleSave()
             mqtt_topic = server.arg(i);
             last_error = "set mqtt_topic to" + mqtt_topic;
 
-        }  
+        }
+
+        // formats the filesystem= resets all settings
+        if (server.argName(i) == "fsformat") {
+            if (SPIFFS.format()) {
+                last_error = "Datei-System formatiert";
+            }
+            else {
+                last_error = "Datei-System formatiert Error";
+            }
+            
+        }
+        //LOAD CURRENT SAVED DATA
+        if (server.argName(i) == "eepromread") {
+            restore_eeprom_values();
+        }
+        //LOAD FACOTRY RESET
+        if (server.argName(i) == "factreset") {
+           write_deffault_to_eeprom();
+        }
     }
     //SAVE THESE DATA
     save_values_to_eeprom();
@@ -348,6 +369,19 @@ void handleRoot()
                      "<input type='text' value='"+ String(mqtt_topic) + "' name='mqtt_topic' required placeholder='/iot'/>"
                      "<input type='submit' value='SET MQTT BASE TOPIC'/>"
                      "</form>"
+                     "<br><h3> DEVICE SETTINGS </h3>"
+                     "<form name='btn_on' action='/save' method='GET' required >"
+                     "<input type='hidden' value='fsformat' name='fsformat' />"
+                     "<input type='submit' value='DELETE CONFIGURATION'/>"
+                     "</form><br>"
+                     "<form name='btn_on' action='/save' method='GET' required >"
+                     "<input type='hidden' value='factreset' name='factreset' />"
+                     "<input type='submit' value='FACTORY RESET'/>"
+                     "</form><br>"
+                     "<form name='btn_on' action='/save' method='GET' required >"
+                     "<input type='hidden' value='eepromread' name='eepromread' />"
+                     "<input type='submit' value='READ STORED CONFIG'/>"
+                     "</form><br>"
                      "<br><hr><h3>LAST SYSTEM MESSAGE</h3><br>" + last_error;
 
 
@@ -372,7 +406,7 @@ void setup_wifi() {
  
     // START WFIFIMANAGER FOR CAPTIVE PORTAL
     WiFiManager wifiManager;
-    wifiManager.setDebugOutput(false);
+    wifiManager.setDebugOutput(true);
     wifiManager.setTimeout(120);
     //TRY TO CONNECT
     // AND DISPLAY IP ON CLOCKS HOUR DISPLAY (FOR 2 DIGIT CLOCKS)
@@ -392,15 +426,15 @@ void setup_wifi() {
 }
  
 void reconnect() {
-    while (!client.connected()) {
+    if (client.connected()) {return;}
         Serial.print("Reconnecting...");
         if (!client.connect(("smartmeter_" + String(ESP.getChipId())).c_str())) {
             Serial.print("failed, rc=");
             Serial.print(client.state());
             Serial.println(" retrying in 5 seconds");
-            delay(5000);
+            
         }
-    }
+    
 }
 
 
