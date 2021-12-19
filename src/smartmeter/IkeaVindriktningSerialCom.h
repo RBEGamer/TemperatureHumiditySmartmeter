@@ -6,14 +6,41 @@
 // added state.lastPM25
 // rework Serial.printf
 
+//USE THIS FLAG ON ARDUINO UNO/NANO WITH ETHERNET SHIELD
+//DONT SET FOR ESP32 OR ESP8266
+//#define USE_SOFTWARE_SERIAL
+
+
+#define DEBUG_SERIAL Serial
+
+
+
+#ifdef USE_SOFTWARE_SERIAL
+#include <SoftwareSerial.h>
+SoftwareSerial sensorSerial(05, -1); // RX,
+#define SERIAL_VK sensorSerial
+#else
+
+//ON ESP32 WE USE THE BUILD IN SERIAL 2 WITH DIFFERENT PINS
+#if defined(ESP32)
+  #define RXD2 16
+  #define TXD2 17
+  #define SERIAL_VK Serial2
+  
+#elif defined(ESP8266)
+  #define SERIAL_VK Serial1
+#else
+  #define SERIAL_VK Serial2
+#endif
+
+#endif
+
 
 
 #include "IkeaVindriktningTypes.h"
-#define RXD2 16
-#define TXD2 17
+
 namespace IkeaVindriktningSerialCom {
-    constexpr static const uint8_t PIN_UART_RX = 8; // D2 on Wemos D1 Mini
-    constexpr static const uint8_t PIN_UART_TX = 9; // UNUSED
+    
 
     
 
@@ -21,8 +48,17 @@ namespace IkeaVindriktningSerialCom {
     uint8_t rxBufIdx = 0;
 
     void setup() {
-        //sensorSerial.begin(9600);
-        Serial2.begin(9600, SERIAL_8N1, RXD2,TXD2);
+
+        #ifdef USE_SOFTWARE_SERIAL
+          SERIAL_VK.begin(9600);
+        #else
+
+          #ifdef ESP32
+          SERIAL_VK.begin(9600, SERIAL_8N1, RXD2,-1);
+          #else
+            SERIAL_VK.begin(9600);
+          #endif
+        #endif
     }
 
     void clearRxBuf() {
@@ -55,8 +91,8 @@ namespace IkeaVindriktningSerialCom {
 
             state.avgPM25 = avgPM25;
             state.valid = true;
-            Serial.print("NEW PM 2.5 READING:");
-            Serial.println(state.avgPM25);
+            DEBUG_SERIAL.print("NEW PM 2.5 READING:");
+            DEBUG_SERIAL.println(state.avgPM25);
         }
 
         clearRxBuf();
@@ -66,7 +102,7 @@ namespace IkeaVindriktningSerialCom {
         bool headerValid = serialRxBuf[0] == 0x16 && serialRxBuf[1] == 0x11 && serialRxBuf[2] == 0x0B;
 
         if (!headerValid) {
-            Serial.println("Received message with invalid header.");
+            DEBUG_SERIAL.println("Received message with invalid header.");
         }
 
         return headerValid;
@@ -80,21 +116,21 @@ namespace IkeaVindriktningSerialCom {
         }
 
         if (checksum != 0) {
-            Serial.print("Received message with invalid checksum. Expected: 0. Actual: \n");
-            Serial.println(checksum);
+            DEBUG_SERIAL.print("Received message with invalid checksum. Expected: 0. Actual: \n");
+            DEBUG_SERIAL.println(checksum);
         }
 
         return checksum == 0;
     }
 
     void handleUart(particleSensorState_t& state) {
-        if (!Serial2.available()) {
+        if (!SERIAL_VK.available()) {
             return;
         }
 
         //Serial.print("Receiving:");
-        while (Serial2.available()) {
-            serialRxBuf[rxBufIdx++] = Serial2.read();
+        while (SERIAL_VK.available()) {
+            serialRxBuf[rxBufIdx++] = SERIAL_VK.read();
             //Serial.print(".");
 
             // Without this delay, receiving data breaks for reasons that are beyond me
@@ -108,17 +144,6 @@ namespace IkeaVindriktningSerialCom {
 
         if (isValidHeader() && isValidChecksum()) {
             parseState(state);
-            /*
-            Serial.printf(
-                "Current measurements: %d, %d, %d, %d, %d\n",
-
-                state.measurements[0],
-                state.measurements[1],
-                state.measurements[2],
-                state.measurements[3],
-                state.measurements[4]
-            );
-            */
         } else {
             clearRxBuf();
         }

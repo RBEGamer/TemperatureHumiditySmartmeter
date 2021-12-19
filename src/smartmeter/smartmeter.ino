@@ -1,7 +1,19 @@
-#include <ESP8266WiFi.h>
+#ifdef ESP8266
+  #include <ESP8266WiFi.h>
+  #include <ESP8266WebServer.h>
+  #include <ESP8266mDNS.h>
+#endif
+
+
+#ifdef ESP32
+  #include <WebServer.h>
+  #include "SPIFFS.h"
+  #include <ESPmDNS.h>
+#endif
+
 #include <PubSubClient.h>
 #include <WiFiClient.h>
-#include <ESP8266WebServer.h>
+
 #include <WiFiManager.h>
 #include <Wire.h>
 #include <iostream>
@@ -11,14 +23,28 @@
 #include <DHT_U.h>
 #include <FS.h> //Include File System Headers
 #include <ArduinoOTA.h>
-#include <ESP8266mDNS.h>
 
+
+
+
+
+
+#include "IkeaVindriktningSerialCom.h" 
+#include "IkeaVindriktningTypes.h"
+particleSensorState_t state;
+
+
+
+
+
+#define WEBSERVER_PORT 80
 #define DHTPIN 4     // Digital pin connected to the DHT sensor -> EPS8266 Pin D2
 #define DHTTYPE    DHT11     // DHT 22 (AM2302)
 
 #define DEFAULT_MQTT_BROKER "192.168.178.89"
 #define DEFAULT_MQTT_TOPIC "/iot"
 #define DEFAULT_MQTT_BROKER_PORT "1883"
+#define DEFAULT_ENABLE_PM25 "0"
 #define MDNS_NAME "SMARTMETER" // set hostname
 #define WEBSITE_TITLE "SMARTMETER Configuration" // name your device
 #define VERSION "1.0"
@@ -39,15 +65,24 @@ String mqtt_broker_url = "";
 String mqtt_topic = "";
 String mqtt_broker_port = "";
 String last_error = "";
-
+String enable_pm25 = "";
 
 const char* file_mqtt_server = "/mqttbroker.txt";
 const char* file_mqtt_topic = "/mqtttopic.txt";
 const char* file_mqtt_broker_port = "/mqttbrokerport.txt";
+const char* file_enable_pm25 = "/enablepm25.txt";
+
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-ESP8266WebServer server(80);
+
+#ifdef ESP8266
+ESP8266WebServer server(WEBSERVER_PORT);
+#endif
+
+#ifdef ESP32
+WebServer server(WEBSERVER_PORT);
+#endif
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
 
@@ -172,6 +207,7 @@ void restore_eeprom_values()
     mqtt_broker_url = read_file(file_mqtt_server,DEFAULT_MQTT_BROKER);
     mqtt_topic = read_file(file_mqtt_topic,DEFAULT_MQTT_TOPIC);
     mqtt_broker_port = read_file(file_mqtt_broker_port, String(DEFAULT_MQTT_BROKER_PORT));
+    enable_pm25 = read_file(file_enable_pm25, String(DEFAULT_ENABLE_PM25));
 }
 
 bool write_file(const char* _file, String _content)
@@ -190,6 +226,7 @@ void save_values_to_eeprom(){
     write_file(file_mqtt_server, mqtt_broker_url);
     write_file(file_mqtt_topic, mqtt_topic);
     write_file(file_mqtt_broker_port, mqtt_broker_port);
+    write_file(file_enable_pm25,enable_pm25);
 }
 
 
@@ -197,10 +234,24 @@ void write_deffault_to_eeprom(){
   mqtt_broker_url = DEFAULT_MQTT_BROKER;
   mqtt_broker_port = DEFAULT_MQTT_BROKER_PORT;
   mqtt_topic = DEFAULT_MQTT_TOPIC;
+  enable_pm25 = DEFAULT_ENABLE_PM25;
   save_values_to_eeprom();
 }
 
-
+uint32_t get_esp_chip_id(){
+  #if defined(ESP8266)
+  return ESP.getChipId();
+  #elif defined(ESP32)
+    uint32_t chipId = 0;
+    for(int i=0; i<17; i=i+8) {
+      chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+    }
+  return chipId;
+  #else
+  return 0;
+  #endif
+  
+}
 void setup() {
     Serial.begin(9600);
 
@@ -226,12 +277,12 @@ void setup() {
     server.begin();
 
     //REGISTER MDNS
-    if (MDNS.begin((MDNS_NAME + String(ESP.getChipId())).c_str())) {
+    if (MDNS.begin((MDNS_NAME + String(get_esp_chip_id())).c_str())) {
     }
 
     
     //START OTA LIB
-    ArduinoOTA.setHostname((MDNS_NAME + String(ESP.getChipId())).c_str());
+    ArduinoOTA.setHostname((MDNS_NAME + String(get_esp_chip_id())).c_str());
     ArduinoOTA.onStart([]() {
         String type;
         if (ArduinoOTA.getCommand() == U_FLASH) {
@@ -263,8 +314,20 @@ void setup() {
     //SETUP MQTT
     setup_mqtt_client();
     Serial.println("_setup_complete_");
-    
+
+
+
+    //SETUP PM25 IKRA VIDRIKNING SENSOR
+    if(enable_pm25.toInt()){
+      IkeaVindriktningSerialCom::setup();
+      for(int i = 0; i < 10000; i++){
+        IkeaVindriktningSerialCom::handleUart(state);
+        delay(1);
+      }
+    }
 }
+
+
 
 
 String IpAddress2String(const IPAddress& ipAddress)
@@ -280,7 +343,7 @@ void mqtt_reconnect() {
   // Loop until we're reconnected
  if(client.connected()) {return;}
     // Attempt to connect
-    if (client.connect((MDNS_NAME + String(ESP.getChipId())).c_str())) {
+    if (client.connect((MDNS_NAME + String(get_esp_chip_id())).c_str())) {
       last_error = "MQTT CLICNET CONNCTED";
     } else {
       last_error = "MQTT CLCIENT CONECT FAILED WITH" + String(client.state());
@@ -320,6 +383,14 @@ void handleSave()
 
         }
 
+        if (server.argName(i) == "mqtt_topic") {
+            enable_pm25 = server.arg(i);
+            enable_pm25 = "set enable_pm25 to" + enable_pm25;
+
+        }
+
+
+
         // formats the filesystem= resets all settings
         if (server.argName(i) == "fsformat") {
             if (SPIFFS.format()) {
@@ -352,7 +423,7 @@ void handleRoot()
 {
 
     String control_forms = "<hr><h2>DEVICE INFO</h2>";
-    control_forms+="<h3>" + String(MDNS_NAME) + String(ESP.getChipId()) + "<br><br>"+BOARD_INFO+"</h3><br>";
+    control_forms+="<h3>" + String(MDNS_NAME) + String(get_esp_chip_id()) + "<br><br>"+BOARD_INFO+"</h3><br>";
 
 
      control_forms += 
@@ -369,6 +440,12 @@ void handleRoot()
                      "<input type='text' value='"+ String(mqtt_topic) + "' name='mqtt_topic' required placeholder='/iot'/>"
                      "<input type='submit' value='SET MQTT BASE TOPIC'/>"
                      "</form>"
+                     "<form name='btn_off' action='/save' method='GET'>"
+                     "<input type='number' value='"+ String(enable_pm25) + "' name='enable_pm25' min='0' max='1' required placeholder='1'/>"
+                     "<input type='submit' value='SET PM25 SENSOR STATE'/>"
+                     "</form>"
+
+                     
                      "<br><h3> DEVICE SETTINGS </h3>"
                      "<form name='btn_on' action='/save' method='GET' required >"
                      "<input type='hidden' value='fsformat' name='fsformat' />"
@@ -410,7 +487,7 @@ void setup_wifi() {
     wifiManager.setTimeout(120);
     //TRY TO CONNECT
     // AND DISPLAY IP ON CLOCKS HOUR DISPLAY (FOR 2 DIGIT CLOCKS)
-    if(wifiManager.autoConnect("SmartmeterConfiguration")){
+    if(wifiManager.autoConnect(("SmartmeterConfiguration_" + String(get_esp_chip_id())).c_str())){
       String ip = IpAddress2String(WiFi.localIP());
       Serial.println(ip);
       
@@ -428,7 +505,7 @@ void setup_wifi() {
 void reconnect() {
     if (client.connected()) {return;}
         Serial.print("Reconnecting...");
-        if (!client.connect(("smartmeter_" + String(ESP.getChipId())).c_str())) {
+        if (!client.connect(("smartmeter_" + String(get_esp_chip_id())).c_str())) {
             Serial.print("failed, rc=");
             Serial.print(client.state());
             Serial.println(" retrying in 5 seconds");
@@ -436,6 +513,7 @@ void reconnect() {
         }
     
 }
+
 
 
 void publish_values(){
@@ -462,7 +540,7 @@ void publish_values(){
       Serial.print(Temperatur);
       Serial.println(F("°C"));
       snprintf (temp, 50, "%f", Temperatur);
-      client.publish((mqtt_topic + "/"+String(ESP.getChipId())+"/temperature/").c_str(), temp);
+      client.publish((mqtt_topic + "/"+String(get_esp_chip_id())+"/temperature/").c_str(), temp);
     }
   
     dht.humidity().getEvent(&event);
@@ -476,7 +554,24 @@ void publish_values(){
       Serial.print(Luftfeuchtigkeit);
       Serial.println(F("%"));
       snprintf (hum, 50, "%f", Luftfeuchtigkeit);
-      client.publish((mqtt_topic + "/"+String(ESP.getChipId())+"/humidity/").c_str(), hum);
+      client.publish((mqtt_topic + "/"+String(get_esp_chip_id())+"/humidity/").c_str(), hum);
+    }
+
+
+
+
+    if(enable_pm25.toInt()){
+     char pm25[100];
+     IkeaVindriktningSerialCom::handleUart(state);
+    float PM25=state.lastPM25 * 1.00;
+     Serial.print(F("PM2.5: "));
+      Serial.print(PM25);
+      Serial.println(F(""));
+
+      snprintf (pm25, 50, "%f", PM25);
+      client.publish((mqtt_topic + "/"+String(get_esp_chip_id())+"/pm25/").c_str(), pm25);
+      Serial.print("Publish message: ");
+      Serial.println(pm25);
     }
   }
 
