@@ -54,8 +54,23 @@ sudo systemctl enable mosquitto.service
 sudo systemctl start mosquitto.service
 
 # INSTALL INFLUX
-curl -s https://repos.influxdata.com/influxdb2.key | gpg --import -
-wget https://dl.influxdata.com/influxdb/releases/influxdb2-2.0.9-linux-arm.tar.gz.asc
+wget -qO- https://repos.influxdata.com/influxdb.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/influxdb.gpg > /dev/null
+export DISTRIB_ID=$(lsb_release -si); export DISTRIB_CODENAME=$(lsb_release -sc)
+echo "deb [signed-by=/etc/apt/trusted.gpg.d/influxdb.gpg] https://repos.influxdata.com/${DISTRIB_ID,,} ${DISTRIB_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/influxdb.list > /dev/null
+
+sudo apt-get update && sudo apt-get install influxdb2
+
+
+sudo service influxdb enable
+sudo service influxdb start
+sudo service influxdb status
+
+
+# SETUP DATABASE USERS
+# UES FOR ORGANISATION AND BUCKIET IOT
+influx setup
+influx auth list
+# AFTER THIS SETUP YOU CAN LOGIN USING 127.0.0.1:8086 TO ACCESS THE WEB CONFIG
 
 ```
 
@@ -63,6 +78,7 @@ wget https://dl.influxdata.com/influxdb/releases/influxdb2-2.0.9-linux-arm.tar.g
 
 ### MQTT2INFLUX BRIDGE
 
+This bridge scrip simply subscribes to all topics inside a given namespace `/iot` and writes all messages with float values in it into the `iot` bucket f the influx db instance.
 
 ```bash
 # CLONE REPO
