@@ -1,3 +1,6 @@
+#include <FS.h> //Include File System Headers
+
+
 #ifdef ESP8266
   #include <ESP8266WiFi.h>
   #include <ESP8266WebServer.h>
@@ -8,6 +11,7 @@
 #ifdef ESP32
   #include <WebServer.h>
   #include "SPIFFS.h"
+  #define FORMAT_SPIFFS_IF_FAILED true
   #include <ESPmDNS.h>
 #endif
 
@@ -21,7 +25,7 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
-#include <FS.h> //Include File System Headers
+
 #include <ArduinoOTA.h>
 
 
@@ -38,13 +42,21 @@ particleSensorState_t state;
 
 
 #define WEBSERVER_PORT 80
-#define DHTPIN 4     // Digital pin connected to the DHT sensor -> EPS8266 Pin D2
-#define DHTTYPE    DHT11     // DHT 22 (AM2302)
+
+//ESP8266 => D2
+//ESP32 => D4
+#define DHTPIN 4
+
+
+
+
+#define DHTTYPE    DHT22     // DHT 22 (AM2302)
 
 #define DEFAULT_MQTT_BROKER "192.168.178.89"
 #define DEFAULT_MQTT_TOPIC "/iot"
 #define DEFAULT_MQTT_BROKER_PORT "1883"
-#define DEFAULT_ENABLE_PM25 "0"
+#define DEFAULT_ENABLE_PM25 "1"
+#define DEFAULT_ENABLE_DHT "1"
 #define MDNS_NAME "SMARTMETER" // set hostname
 #define WEBSITE_TITLE "SMARTMETER Configuration" // name your device
 #define VERSION "1.0"
@@ -66,12 +78,12 @@ String mqtt_topic = "";
 String mqtt_broker_port = "";
 String last_error = "";
 String enable_pm25 = "";
-
+String enable_dht = "";
 const char* file_mqtt_server = "/mqttbroker.txt";
 const char* file_mqtt_topic = "/mqtttopic.txt";
 const char* file_mqtt_broker_port = "/mqttbrokerport.txt";
 const char* file_enable_pm25 = "/enablepm25.txt";
-
+const char* file_enable_dht = "/enable_dht.txt";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -208,6 +220,7 @@ void restore_eeprom_values()
     mqtt_topic = read_file(file_mqtt_topic,DEFAULT_MQTT_TOPIC);
     mqtt_broker_port = read_file(file_mqtt_broker_port, String(DEFAULT_MQTT_BROKER_PORT));
     enable_pm25 = read_file(file_enable_pm25, String(DEFAULT_ENABLE_PM25));
+    enable_dht =  read_file(file_enable_dht, String(DEFAULT_ENABLE_DHT));
 }
 
 bool write_file(const char* _file, String _content)
@@ -227,6 +240,7 @@ void save_values_to_eeprom(){
     write_file(file_mqtt_topic, mqtt_topic);
     write_file(file_mqtt_broker_port, mqtt_broker_port);
     write_file(file_enable_pm25,enable_pm25);
+    write_file(file_enable_dht,enable_dht);
 }
 
 
@@ -235,6 +249,7 @@ void write_deffault_to_eeprom(){
   mqtt_broker_port = DEFAULT_MQTT_BROKER_PORT;
   mqtt_topic = DEFAULT_MQTT_TOPIC;
   enable_pm25 = DEFAULT_ENABLE_PM25;
+  enable_dht = DEFAULT_ENABLE_DHT;
   save_values_to_eeprom();
 }
 
@@ -304,27 +319,31 @@ void setup() {
     ArduinoOTA.begin();
 
     // INIT DHT SENSOR
+    if(enable_dht.toInt()){
     dht.begin();
     sensor_t sensor;
     dht.temperature().getSensor(&sensor);
     dht.humidity().getSensor(&sensor);
-
+    }
 
 
     //SETUP MQTT
     setup_mqtt_client();
-    Serial.println("_setup_complete_");
+    
 
 
 
     //SETUP PM25 IKRA VIDRIKNING SENSOR
     if(enable_pm25.toInt()){
       IkeaVindriktningSerialCom::setup();
-      for(int i = 0; i < 10000; i++){
+      for(int i = 0; i < 1000; i++){
         IkeaVindriktningSerialCom::handleUart(state);
         delay(1);
       }
     }
+
+    Serial.println("_setup_complete_");
+
 }
 
 
@@ -383,13 +402,19 @@ void handleSave()
 
         }
 
-        if (server.argName(i) == "mqtt_topic") {
+        if (server.argName(i) == "enable_pm25") {
             enable_pm25 = server.arg(i);
             enable_pm25 = "set enable_pm25 to" + enable_pm25;
 
         }
 
 
+        if (server.argName(i) == "enable_dht") {
+            enable_dht = server.arg(i);
+            enable_dht = "set enable_dht to" + enable_dht;
+
+        }
+        
 
         // formats the filesystem= resets all settings
         if (server.argName(i) == "fsformat") {
@@ -444,6 +469,12 @@ void handleRoot()
                      "<input type='number' value='"+ String(enable_pm25) + "' name='enable_pm25' min='0' max='1' required placeholder='1'/>"
                      "<input type='submit' value='SET PM25 SENSOR STATE'/>"
                      "</form>"
+                     "<form name='btn_off' action='/save' method='GET'>"
+                     "<input type='number' value='"+ String(enable_dht) + "' name='enable_dht' min='0' max='1' required placeholder='1'/>"
+                     "<input type='submit' value='SET DHT SENSOR STATE'/>"
+                     "</form>"
+
+
 
                      
                      "<br><h3> DEVICE SETTINGS </h3>"
@@ -526,7 +557,7 @@ void publish_values(){
 
 
      sensors_event_t event;
-  
+     if(enable_dht.toInt()){
     Serial.print("Publish message: ");
     Serial.println(msg);
     dht.temperature().getEvent(&event);
@@ -556,7 +587,7 @@ void publish_values(){
       snprintf (hum, 50, "%f", Luftfeuchtigkeit);
       client.publish((mqtt_topic + "/"+String(get_esp_chip_id())+"/humidity/").c_str(), hum);
     }
-
+     }
 
 
 
@@ -580,31 +611,40 @@ unsigned long timeNow = 0;
 unsigned long timeLast = 0;
 
 void loop() {
-
+    Serial.println(".");
     //HANDLE SERVER
     server.handleClient();
-
+    
     
      
 	
 		if (!client.connected()) {
 			mqtt_reconnect();
-		}
-    client.loop();
+		}else{
+
+      
+		client.loop();
+    if ((millis() - timeLast) > 1000) {
+        timeLast = millis();   
+        publish_values();
+    }
+
+    
+    
+		  }
+    
 
     //HANDLE OTA
     ArduinoOTA.handle();
 
 
 
-    if ((millis() - timeLast) > 1000) {
-        timeLast = millis();   
-        publish_values();
-    }
+    
 
       
 	
     
    delay(70);
+   
   
 }
