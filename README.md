@@ -36,7 +36,7 @@ Click upload, to compile and flash the program.
 After resetting the node, scan the wifi for open netzworks and select  `SMARTMETER ConfigurationxxXXXxXX`, to set the wifi setting for your network.
 If the webpage didnt open automatically, simply enter the following ip in your browser:
 
-`http://192.168.4.1/`
+* `http://192.168.4.1/`
 
 
 After this step and an additional reset the node should be visiable in your network.
@@ -79,6 +79,8 @@ influx auth list
 ### MQTT2INFLUX BRIDGE
 
 This bridge scrip simply subscribes to all topics inside a given namespace `/iot` and writes all messages with float values in it into the `iot` bucket f the influx db instance.
+So you dont need to modify the scrip if you want to add more sensors.
+
 
 ```bash
 # CLONE REPO
@@ -90,7 +92,7 @@ nano /home/pi/MSFHAC_Smartmeter/src/mqtt2influx/bridge/mqtt_iot_influx_bridge.py
 
 # 11 | INFLUXDB_ADDRESS = 'http://127.0.0.1:8086'
 # 12 | INFLUXDB_ORG = 'iot'
-# 13 | INFLUXDB_TOKEN = '7s4oE6wlSZld6VvsR9cz9lI-TmE3GuN-gAdji3Gqc_3a9MjbZs2B1dkIJ2gKZMJCs4mIxD4QRHDnjHWCzkL9nQ=='
+# 13 | INFLUXDB_TOKEN = '<FROM_INFLUX_DB_WEBUI>'
 # 14 | INFLUXDB_BUCKET = 'iot'
 
 # 18 |  MQTT_PORT = 1883
