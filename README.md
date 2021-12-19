@@ -65,6 +65,12 @@ wget https://dl.influxdata.com/influxdb/releases/influxdb2-2.0.9-linux-arm.tar.g
 
 
 ```bash
+# INSTALL PYTHON PACKAGES
+sudo apt install python3-pip -y
+sudo pip3 -H install paho-mqtt python-etcd
+python3 -m pip install influxdb
+
+
 # CLONE REPO
 cd /home/pi
 git clone git@github.com:RBEGamer/MSFHAC_Smartmeter.git ./MSFHAC_Smartmeter
