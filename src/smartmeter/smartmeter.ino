@@ -244,13 +244,16 @@ void save_values_to_eeprom(){
 }
 
 
-void write_deffault_to_eeprom(){        
+void write_deffault_to_eeprom(bool _with_save = true){        
   mqtt_broker_url = DEFAULT_MQTT_BROKER;
   mqtt_broker_port = DEFAULT_MQTT_BROKER_PORT;
   mqtt_topic = DEFAULT_MQTT_TOPIC;
   enable_pm25 = DEFAULT_ENABLE_PM25;
   enable_dht = DEFAULT_ENABLE_DHT;
-  save_values_to_eeprom();
+  if(_with_save){
+    save_values_to_eeprom();
+  }
+  
 }
 
 uint32_t get_esp_chip_id(){
@@ -270,12 +273,13 @@ uint32_t get_esp_chip_id(){
 void setup() {
     Serial.begin(9600);
 
-
-    if (SPIFFS.begin()) {
+    write_deffault_to_eeprom(false);
+    if (SPIFFS.begin(true)) {
         Serial.println("SPIFFS Initialisierung....OK");
     }
     else {
         Serial.println("SPIFFS Initialisierung...Fehler!");
+        write_deffault_to_eeprom(true);
     }
     // LOAD SETTINGS
     restore_eeprom_values();
