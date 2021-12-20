@@ -18,7 +18,7 @@ This repositoy contains a rewritten version of the original software, to make th
 
 ### SENSOR NODE
 
-![SCHEMATIC](documenation/schematic.png)
+![SCHEMATIC](documentation/schematic.png)
 
 #### SOFTWARE
 
