@@ -18,6 +18,8 @@ This repositoy contains a rewritten version of the original software, to make th
 
 ### SENSOR NODE
 
+![SCHEMATIC](documenation/schematic.png)
+
 #### SOFTWARE
 
 Flash the esp8266 or esp32 using the Arduino IDE.
