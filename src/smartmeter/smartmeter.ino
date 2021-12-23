@@ -55,10 +55,10 @@ particleSensorState_t state;
 #define DEFAULT_MQTT_BROKER "192.168.178.89"
 #define DEFAULT_MQTT_TOPIC "/iot"
 #define DEFAULT_MQTT_BROKER_PORT "1883"
-#define DEFAULT_ENABLE_PM25 "1"
+#define DEFAULT_ENABLE_PM25 "0"
 #define DEFAULT_ENABLE_DHT "1"
-#define MDNS_NAME "SMARTMETER" // set hostname
-#define WEBSITE_TITLE "SMARTMETER Configuration" // name your device
+#define MDNS_NAME "SMARTMETER"
+#define WEBSITE_TITLE "SMARTMETER Configuration" 
 #define VERSION "1.0"
 
 #if defined(ESP8266)
