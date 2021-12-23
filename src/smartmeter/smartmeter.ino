@@ -50,7 +50,7 @@ particleSensorState_t state;
 
 
 
-#define DHTTYPE    DHT22     // DHT 22 (AM2302)
+#define DHTTYPE    DHT11     // DHT 22 (AM2302)
 
 #define DEFAULT_MQTT_BROKER "192.168.178.89"
 #define DEFAULT_MQTT_TOPIC "/iot"
@@ -274,7 +274,9 @@ void setup() {
   Serial.begin(9600);
 
   write_deffault_to_eeprom(false);
-  if (SPIFFS.begin(true)) {
+
+ 
+ if (SPIFFS.begin()) {
     Serial.println("SPIFFS Initialisierung....OK");
   }
   else {

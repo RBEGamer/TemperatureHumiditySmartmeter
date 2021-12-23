@@ -94,7 +94,6 @@ nano /home/pi/MSFHAC_Smartmeter/src/mqtt2influx/bridge/mqtt_iot_influx_bridge.py
 # 12 | INFLUXDB_ORG = 'iot'
 # 13 | INFLUXDB_TOKEN = '<FROM_INFLUX_DB_WEBUI>'
 # 14 | INFLUXDB_BUCKET = 'iot'
-
 # 18 |  MQTT_PORT = 1883
 # 19 | MQTT_ADDRESS = '127.0.0.1'
 
