@@ -18,6 +18,8 @@ This repositoy contains a rewritten version of the original software, to make th
 
 ### SENSOR NODE
 
+![SCHEMATIC](documentation/schematic.png)
+
 #### SOFTWARE
 
 Flash the esp8266 or esp32 using the Arduino IDE.
@@ -83,6 +85,12 @@ So you dont need to modify the scrip if you want to add more sensors.
 
 
 ```bash
+# INSTALL PYTHON PACKAGES
+sudo apt install python3-pip -y
+sudo pip3 -H install paho-mqtt python-etcd
+python3 -m pip install influxdb
+
+
 # CLONE REPO
 cd /home/pi
 git clone git@github.com:RBEGamer/MSFHAC_Smartmeter.git ./MSFHAC_Smartmeter
