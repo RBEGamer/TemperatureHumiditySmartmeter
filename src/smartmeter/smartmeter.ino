@@ -38,7 +38,7 @@
 particleSensorState_t state;
 
 
-
+#include "WEMOS_SHT3X.h"
 
 
 #define WEBSERVER_PORT 80
@@ -56,7 +56,8 @@ particleSensorState_t state;
 #define DEFAULT_MQTT_TOPIC "/iot"
 #define DEFAULT_MQTT_BROKER_PORT "1883"
 #define DEFAULT_ENABLE_PM25 "0"
-#define DEFAULT_ENABLE_DHT "1"
+#define DEFAULT_ENABLE_DHT "0"
+#define DEFAULT_ENABLE_SHT30 "0"
 #define MDNS_NAME "SMARTMETER"
 #define WEBSITE_TITLE "SMARTMETER Configuration" 
 #define VERSION "1.0"
@@ -79,11 +80,13 @@ String mqtt_broker_port = "";
 String last_error = "";
 String enable_pm25 = "";
 String enable_dht = "";
+String enable_sht30 = "";
 const char* file_mqtt_server = "/mqttbroker.txt";
 const char* file_mqtt_topic = "/mqtttopic.txt";
 const char* file_mqtt_broker_port = "/mqttbrokerport.txt";
 const char* file_enable_pm25 = "/enablepm25.txt";
 const char* file_enable_dht = "/enable_dht.txt";
+const char* file_enable_sht30 = "/enable_sht30.txt";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -95,8 +98,9 @@ ESP8266WebServer server(WEBSERVER_PORT);
 #ifdef ESP32
 WebServer server(WEBSERVER_PORT);
 #endif
-DHT_Unified dht(DHTPIN, DHTTYPE);
 
+DHT_Unified dht(DHTPIN, DHTTYPE);
+SHT3X sht30(0x44); 
 
 const String phead_1 = "<!DOCTYPE html><html><head><title>";
 const String phead_2 = "</title>"
@@ -221,6 +225,7 @@ void restore_eeprom_values()
   mqtt_broker_port = read_file(file_mqtt_broker_port, String(DEFAULT_MQTT_BROKER_PORT));
   enable_pm25 = read_file(file_enable_pm25, String(DEFAULT_ENABLE_PM25));
   enable_dht =  read_file(file_enable_dht, String(DEFAULT_ENABLE_DHT));
+  enable_sht30 = read_file(file_enable_sht30, String(DEFAULT_ENABLE_SHT30));
 }
 
 bool write_file(const char* _file, String _content)
@@ -241,6 +246,7 @@ void save_values_to_eeprom() {
   write_file(file_mqtt_broker_port, mqtt_broker_port);
   write_file(file_enable_pm25, enable_pm25);
   write_file(file_enable_dht, enable_dht);
+  write_file(file_enable_sht30, enable_sht30);
 }
 
 
@@ -250,6 +256,8 @@ void write_deffault_to_eeprom(bool _with_save = true) {
   mqtt_topic = DEFAULT_MQTT_TOPIC;
   enable_pm25 = DEFAULT_ENABLE_PM25;
   enable_dht = DEFAULT_ENABLE_DHT;
+  enable_sht30 = DEFAULT_ENABLE_SHT30;
+  
   if (_with_save) {
     save_values_to_eeprom();
   }
@@ -332,6 +340,8 @@ void setup() {
     dht.humidity().getSensor(&sensor);
   }
 
+  if(enable_sht30.toInt()){
+  }
 
   //SETUP MQTT
   setup_mqtt_client();
@@ -407,14 +417,19 @@ void handleSave()
     if (server.argName(i) == "mqtt_topic") {
       mqtt_topic = server.arg(i);
       last_error = "set mqtt_topic to" + mqtt_topic;
-
     }
 
     if (server.argName(i) == "enable_pm25") {
       enable_pm25 = server.arg(i);
-      enable_pm25 = "set enable_pm25 to" + enable_pm25;
-
+      last_error = "set enable_pm25 to" + enable_pm25;
     }
+
+    if (server.argName(i) == "enable_sht30") {
+      enable_sht30 = server.arg(i);
+      last_error = "set enable_sht30 to" + enable_sht30;
+    }
+
+
 
 
     if (server.argName(i) == "enable_dht") {
@@ -481,6 +496,12 @@ void handleRoot()
     "<input type='number' value='" + String(enable_dht) + "' name='enable_dht' min='0' max='1' required placeholder='1'/>"
     "<input type='submit' value='SET DHT SENSOR STATE'/>"
     "</form>"
+    "<form name='btn_off' action='/save' method='GET'>"
+    "<input type='number' value='" + String(enable_sht30) + "' name='enable_sht30' min='0' max='1' required placeholder='1'/>"
+    "<input type='submit' value='SET SHT30 SENSOR STATE'/>"
+    "</form>"
+
+    
 
 
 
@@ -599,6 +620,27 @@ void publish_values() {
     }
   }
 
+
+
+  if(enable_sht30.toInt()){
+
+    if(sht30.get()==0){
+      float temperature = sht30.cTemp;
+      const float humid = sht30.humidity * 1.0;
+      const float temperature_deviation = 4.0;
+      float temperature_calibrated = (temperature - temperature_deviation) * 1.0;
+
+      snprintf (temp, 50, "%f", temperature_calibrated);
+      snprintf (hum, 50, "%f", humid);
+      Serial.print("Temperature in Celsius: ");
+      Serial.println(temperature_calibrated);
+      client.publish((mqtt_topic + "/" + String(get_esp_chip_id()) + "/temperature/").c_str(), temp);
+      Serial.print("Relative Humidity: ");
+      Serial.println(humid);
+      client.publish((mqtt_topic + "/" + String(get_esp_chip_id()) + "/humidity/").c_str(), hum);
+  }
+  
+  }
 
 
   if (enable_pm25.toInt()) {
